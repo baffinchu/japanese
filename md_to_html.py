@@ -13,11 +13,19 @@ def esc(s):
     return html.escape(s)
 
 def fmt_inline(s):
+    placeholders = {}
+    def save_cat(m):
+        key = f'\x00CAT{len(placeholders)}\x00'
+        placeholders[key] = m.group(1)
+        return key
+    s = re.sub(r'<([^>]+)>', save_cat, s)
     s = s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
     s = re.sub(r'`\[([^`]+?)\]`', r'<code class="pat">[\1]</code>', s)
     s = re.sub(r'`([^`]+)`', r'<code>\1</code>', s)
     s = re.sub(r'\*([^*]+)\*', r'<em>\1</em>', s)
     s = re.sub(r'→', r'→', s)
+    for ph, cat in placeholders.items():
+        s = s.replace(ph, f'<span class="badge">{cat}</span>')
     return s
 
 lines = md.split('\n')
@@ -62,6 +70,12 @@ code {
 }
 code.pat {
   background: #e8f0fe; color: #1a56db; font-weight: 600;
+}
+
+.badge {
+  display: inline-block; padding: 3px 16px; font-size: 0.825em;
+  border-radius: 999px; background: #e0e7ff; color: #4338ca;
+  font-weight: 600; vertical-align: middle; line-height: 1.4;
 }
 
 ruby { ruby-align: center; }
@@ -202,11 +216,11 @@ hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
   <button class="menu-btn" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
   <h1>日本語文型辞典</h1>
   <input type="text" id="search" placeholder="検索…" oninput="doSearch(this.value)">
-  <span class="sub">1083 entries</span>
+  <span class="sub">収録項目数: 約1083の文型・表現</span>
 </div>
 
 <nav class="sidebar" id="sidebar">
-<div class="count" id="result-count">1083 entries</div>
+<div class="count" id="result-count">収録項目数: 約1083の文型・表現</div>
 ''')
 
 # First pass: collect section links
@@ -312,6 +326,16 @@ while i < len(lines):
         i += 1
         continue
 
+    # Backtick pattern lines: `[...]` → merge consecutive ones, no explanation box
+    pat_lines = []
+    while i < len(lines) and re.match(r'^\s*`\[[^`]*\]`\s*$', lines[i]):
+        inner = lines[i].strip().strip('`')
+        pat_lines.append(f'<code class="pat">{esc(inner)}</code>')
+        i += 1
+    if pat_lines:
+        out.append(f'<div class="pattern-line">{" ".join(pat_lines)}</div>')
+        continue
+
     # Everything else → explanation paragraph
     stripped = line.strip()
     if stripped:
@@ -339,7 +363,7 @@ function doSearch(val) {
     if (match) visible++;
   });
   document.getElementById('result-count').textContent =
-    q ? visible + ' entries match' : '1083 entries';
+    q ? visible + ' 件が一致' : '収録項目数: 約1083の文型・表現';
 
   // Show/hide entries in main
   document.querySelectorAll('.entry').forEach(entry => {
